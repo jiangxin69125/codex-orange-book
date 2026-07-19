@@ -11,10 +11,14 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
+import tempfile
+import unicodedata
 from pathlib import Path
 
 import markdown
+from markdown.extensions.toc import TocExtension
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
@@ -22,7 +26,31 @@ COVER = ROOT / "cover.html"
 BOOK_HTML = ROOT / "book.html"
 OUTPUT_PDF = ROOT / "Codex橙皮书.pdf"
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+def github_slugify(value: str, separator: str) -> str:
+    """生成与 README 目录链接一致的 GitHub 风格标题锚点。"""
+    value = unicodedata.normalize("NFKC", value).strip().lower()
+    value = re.sub(r"[^\w\s-]", "", value)
+    return re.sub(r"\s+", separator, value)
+
+
+def find_chrome() -> str:
+    """查找可用于无头 PDF 导出的 Chrome/Chromium。"""
+    for executable in (
+        "google-chrome-stable",
+        "google-chrome",
+        "chromium",
+        "chromium-browser",
+        "chrome",
+    ):
+        if path := shutil.which(executable):
+            return path
+
+    macos_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    if macos_chrome.is_file():
+        return str(macos_chrome)
+
+    raise RuntimeError("未找到 Chrome/Chromium；请安装浏览器并确保其可执行文件位于 PATH 中")
 
 
 def extract_cover() -> tuple[str, str]:
@@ -48,7 +76,13 @@ def render_readme() -> str:
     """README.md → HTML 正文。"""
     text = README.read_text(encoding="utf-8")
     md = markdown.Markdown(
-        extensions=["tables", "fenced_code", "sane_lists", "attr_list"],
+        extensions=[
+            "tables",
+            "fenced_code",
+            "sane_lists",
+            "attr_list",
+            TocExtension(slugify=github_slugify),
+        ],
         output_format="html5",
     )
     return md.convert(text)
@@ -182,18 +216,22 @@ def build() -> None:
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
-    subprocess.run(
-        [
-            CHROME,
-            "--headless",
-            "--disable-gpu",
-            "--no-pdf-header-footer",
-            f"--print-to-pdf={OUTPUT_PDF}",
-            BOOK_HTML.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-    )
+    # 独立用户目录可避免复用中的 Chrome 配置锁导致无头进程崩溃。
+    with tempfile.TemporaryDirectory(prefix="codex-pdf-chrome-") as profile_dir:
+        subprocess.run(
+            [
+                find_chrome(),
+                "--headless",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                f"--user-data-dir={profile_dir}",
+                "--no-pdf-header-footer",
+                f"--print-to-pdf={OUTPUT_PDF}",
+                BOOK_HTML.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+        )
     size_kb = OUTPUT_PDF.stat().st_size / 1024
     print(f"已导出 {OUTPUT_PDF.name}（{size_kb:.0f} KB）")
 
