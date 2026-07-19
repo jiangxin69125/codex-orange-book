@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -215,18 +216,22 @@ def build() -> None:
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
-    subprocess.run(
-        [
-            find_chrome(),
-            "--headless",
-            "--disable-gpu",
-            "--no-pdf-header-footer",
-            f"--print-to-pdf={OUTPUT_PDF}",
-            BOOK_HTML.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-    )
+    # 独立用户目录可避免复用中的 Chrome 配置锁导致无头进程崩溃。
+    with tempfile.TemporaryDirectory(prefix="codex-pdf-chrome-") as profile_dir:
+        subprocess.run(
+            [
+                find_chrome(),
+                "--headless",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                f"--user-data-dir={profile_dir}",
+                "--no-pdf-header-footer",
+                f"--print-to-pdf={OUTPUT_PDF}",
+                BOOK_HTML.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+        )
     size_kb = OUTPUT_PDF.stat().st_size / 1024
     print(f"已导出 {OUTPUT_PDF.name}（{size_kb:.0f} KB）")
 
