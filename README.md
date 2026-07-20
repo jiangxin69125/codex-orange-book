@@ -584,11 +584,20 @@ Codex 可以读取、修改文件，还能在你的项目目录里运行命令�
 | 不要给它整个 C 盘权限 | 只选择具体项目文件夹 |
 
 
-推荐每个项目先初始化 Git：
+推荐每个项目先初始化 Git。运行 `git add` 前，先在项目根目录创建 `.gitignore`，至少加入下面这些规则，避免把本地密钥提交进 Git：
+
+```text
+.env
+.env.*
+!.env.example
+```
+
+确认 `git status --short` 中没有密码、API Key 或其他敏感文件后，再逐个提交。下面的 `README.md` 只是示例，请替换成你检查过的文件名：
 
 ```text
 git init
-git add .
+git status --short
+git add README.md
 git commit -m "initial commit"
 ```
 
@@ -1921,8 +1930,8 @@ MCP
 | 3 | Codex | 启动 Codex CLI |
 | 4 | 输入任务 | 让 Codex 开始工作 |
 | 5 | /diff | 在 Codex 内查看改动 |
-| 6 | git diff | 在 Git 里再检查一次 |
-| 7 | git add . | 暂存满意的修改 |
+| 6 | git status && git diff | 检查已修改和新建的文件 |
+| 7 | git add 文件名 | 只暂存检查过的修改 |
 | 8 | git commit -m "说明" | 保存一个版本 |
 | 9 | `codex archive` 或 `/quit` | 归档任务或退出 |
 
@@ -2914,11 +2923,12 @@ Codex 完成任务
 | Codex 改了不该改的文件 | 任务范围太大 | 要求它 revert 无关文件 |
 
 
-推荐新手第一次项目先做：
+推荐新手第一次项目先做。先创建 `.gitignore` 并加入 `.env`、`.env.*`（可以保留 `!.env.example`），再逐个暂存已确认不含密钥的文件。下面的 `README.md` 只是示例，请替换成你检查过的文件名：
 
 ```text
 git init
-git add .
+git status --short
+git add README.md
 git commit -m "initial commit"
 ```
 
