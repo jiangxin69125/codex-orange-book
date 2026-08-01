@@ -1515,20 +1515,22 @@ API Key 登录 = 走 OpenAI Platform API 计费
 
 如果你要用 API Key 登录，先去 OpenAI Platform 创建 API Key。
 
-然后在终端里设置环境变量。
+然后在终端里安全输入 API Key。不要把真实 Key 直接写在命令中，否则它会留在 shell 历史记录里。
 
 macOS / Linux 可以这样写：
 
 ```text
-export OPENAI_API_KEY="你的_API_Key"
-printenv OPENAI_API_KEY | codex login --with-api-key
+printf 'OpenAI API Key: '
+IFS= read -rs OPENAI_API_KEY
+printf '\n'
+printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key
+unset OPENAI_API_KEY
 ```
 
 Windows PowerShell 可以这样写：
 
 ```text
-$env:OPENAI_API_KEY="你的_API_Key"
-$env:OPENAI_API_KEY | codex login --with-api-key
+Read-Host "OpenAI API Key" | codex login --with-api-key
 ```
 
 登录成功后，Codex CLI 会保存登录信息，后面再次运行：
@@ -1662,7 +1664,7 @@ C:\
 | --- | --- | --- |
 | `codex login` | 默认打开浏览器，用 ChatGPT 账号登录 | 小白首选 |
 | `codex login --device-auth` | 用设备码登录 | 远程服务器、浏览器打不开 |
-| `printenv OPENAI_API_KEY \| codex login --with-api-key` | 使用 API Key 登录 | 开发者、自动化、CI/CD |
+| `printf '%s' "$OPENAI_API_KEY" \| codex login --with-api-key` | 使用已安全读入的 API Key 登录（macOS / Linux） | 开发者、自动化、CI/CD |
 | `codex login status` | 查看当前登录方式和状态 | 不确定是否已登录 |
 | `codex logout` | 删除本机保存的登录凭证 | 换账号、公共电脑 |
 
@@ -1670,7 +1672,7 @@ C:\
 Windows PowerShell 使用 API Key 登录：
 
 ```text
-$env:OPENAI_API_KEY | codex login --with-api-key
+Read-Host "OpenAI API Key" | codex login --with-api-key
 ```
 
 ---
