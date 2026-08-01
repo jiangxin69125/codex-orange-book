@@ -1530,7 +1530,10 @@ unset OPENAI_API_KEY
 Windows PowerShell 可以这样写：
 
 ```text
-Read-Host "OpenAI API Key" | codex login --with-api-key
+$secureKey = Read-Host "OpenAI API Key" -AsSecureString
+$apiKey = [System.Net.NetworkCredential]::new("", $secureKey).Password
+$apiKey | codex login --with-api-key
+Remove-Variable apiKey, secureKey
 ```
 
 登录成功后，Codex CLI 会保存登录信息，后面再次运行：
@@ -1672,7 +1675,10 @@ C:\
 Windows PowerShell 使用 API Key 登录：
 
 ```text
-Read-Host "OpenAI API Key" | codex login --with-api-key
+$secureKey = Read-Host "OpenAI API Key" -AsSecureString
+$apiKey = [System.Net.NetworkCredential]::new("", $secureKey).Password
+$apiKey | codex login --with-api-key
+Remove-Variable apiKey, secureKey
 ```
 
 ---

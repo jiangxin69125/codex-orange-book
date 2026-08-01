@@ -20,8 +20,12 @@ class ReadmeCredentialSafetyTests(unittest.TestCase):
 
         self.assertIn("IFS= read -rs OPENAI_API_KEY", text)
         self.assertIn(
-            'Read-Host "OPENAI API Key" | codex login --with-api-key'.lower(),
-            text.lower(),
+            '$secureKey = Read-Host "OpenAI API Key" -AsSecureString',
+            text,
+        )
+        self.assertNotIn(
+            'Read-Host "OpenAI API Key" | codex login --with-api-key',
+            text,
         )
 
 
