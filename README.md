@@ -1897,7 +1897,7 @@ MCP
 
 | 排名 | 命令 | 为什么重要 |
 | --- | --- | --- |
-| 1 | Codex | 启动 Codex CLI |
+| 1 | `codex` | 启动 Codex CLI |
 | 2 | `codex login` | 登录账号 |
 | 3 | `codex login status` | 检查登录状态 |
 | 4 | `codex doctor` | 排查环境问题 |
@@ -1918,7 +1918,7 @@ MCP
 | --- | --- | --- |
 | 1 | cd 项目目录 | 进入项目文件夹 |
 | 2 | git status | 看当前项目状态 |
-| 3 | Codex | 启动 Codex CLI |
+| 3 | `codex` | 启动 Codex CLI |
 | 4 | 输入任务 | 让 Codex 开始工作 |
 | 5 | /diff | 在 Codex 内查看改动 |
 | 6 | git diff | 在 Git 里再检查一次 |
@@ -2646,7 +2646,7 @@ git diff
 | 步骤 | 操作 | 目的 |
 | --- | --- | --- |
 | 1 | cd 项目目录 | 进入正确项目 |
-| 2 | Codex | 启动 Codex CLI |
+| 2 | `codex` | 启动 Codex CLI |
 | 3 | 输入任务 | 告诉 Codex 要做什么 |
 | 4 | 复杂任务先 /plan | 先看方案 |
 | 5 | 等 Codex 读取项目 | 让它理解上下文 |
