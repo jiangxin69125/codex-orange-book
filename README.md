@@ -5170,6 +5170,19 @@ Codex 负责帮你完成具体编程任务。
 
 ##### 复制给 Codex，让它回退代码到指定版本
 
+回退前先检查工作区。未提交的改动不会自动保存；如果直接执行 `git reset --hard`，当前工作区里的其他改动也会一起丢失。
+
+先在 Codex 中输入下面这段话：
+
+```text
+请先只运行 git status、git diff --stat 和 git log --oneline -5，检查当前工作区和最近提交，不要修改任何文件。
+如果存在未提交或未跟踪的改动，请停止并列出它们，让我先提交或备份。
+工作区干净后，请说明如何回到我指定的版本；优先使用新建备份分支和 git revert 等可恢复方案。
+不要使用 git reset --hard 或 git clean -fd，也不要在我确认方案前执行回退。
+```
+
+确认要保留的内容已经提交或备份，并看懂 Codex 给出的方案后，再提供版本号并执行回退。
+
 <p align="center">
   <img src="assets/images/image-059-9cdba830ef.png" alt="在Codex中使用Git进行代码回滚的操作界面" width="860">
 </p>
