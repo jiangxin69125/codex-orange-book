@@ -131,7 +131,10 @@ BOOK_CSS = """
 
   /* 图片：居中、限宽、不跨页断裂 */
   .content p[align="center"] { text-align: center; margin: 3mm 0; break-inside: avoid; }
-  .content img { max-width: 100%; height: auto; border: 1px solid #ececec; border-radius: 3px; }
+  .content img {
+    max-width: 100%; max-height: 250mm; width: auto; height: auto;
+    object-fit: contain; border: 1px solid #ececec; border-radius: 3px;
+  }
 
   .content hr { border: none; border-top: 1px solid #e0dacf; margin: 5mm 0; }
 
