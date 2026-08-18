@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -22,7 +24,37 @@ COVER = ROOT / "cover.html"
 BOOK_HTML = ROOT / "book.html"
 OUTPUT_PDF = ROOT / "Codex橙皮书.pdf"
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# 常见的 Chrome/Chromium 可执行文件位置（macOS / Linux）。
+# 可用环境变量 CHROME 覆盖，方便在 CI、云端或自定义安装路径下使用。
+_CHROME_CANDIDATES = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "google-chrome-stable",
+    "/usr/bin/google-chrome-stable",
+    "google-chrome",
+    "chromium",
+    "chromium-browser",
+    "/usr/bin/google-chrome",
+)
+
+
+def resolve_chrome() -> str:
+    """定位可用的 Chrome/Chromium：优先 CHROME 环境变量，其次按候选列表探测。"""
+    env_chrome = os.environ.get("CHROME")
+    if env_chrome:
+        found = shutil.which(env_chrome) or (env_chrome if Path(env_chrome).exists() else None)
+        if found:
+            return found
+        raise FileNotFoundError(f"环境变量 CHROME 指定的可执行文件不存在：{env_chrome}")
+
+    for candidate in _CHROME_CANDIDATES:
+        found = shutil.which(candidate) or (candidate if Path(candidate).exists() else None)
+        if found:
+            return found
+
+    raise FileNotFoundError(
+        "未找到 Chrome/Chromium。请安装 Google Chrome，或用环境变量 CHROME "
+        "指定可执行文件路径，例如 CHROME=google-chrome python3 tools/build_pdf.py。"
+    )
 
 
 def extract_cover() -> tuple[str, str]:
@@ -182,9 +214,10 @@ def build() -> None:
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
+    chrome = resolve_chrome()
     subprocess.run(
         [
-            CHROME,
+            chrome,
             "--headless",
             "--disable-gpu",
             "--no-pdf-header-footer",
