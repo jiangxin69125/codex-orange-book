@@ -1,0 +1,2 @@
+# 构建 PDF 所需依赖（tools/build_pdf.py）
+markdown==3.10.3
