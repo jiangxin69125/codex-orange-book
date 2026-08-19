@@ -45,6 +45,21 @@ bash /mnt/e/CursorDownload/launch-cursor-linux.sh --help
 CURSOR_LINUX_BIN=/mnt/e/CursorDownload/Cursor-xxx.AppImage bash /mnt/e/CursorDownload/launch-cursor-linux.sh
 ```
 
+## 黑框里出现 `[main]` / EventEmitter 算成功吗？
+
+**只算启动成功，不算已经登录。**
+
+这些行是 Cursor 主进程自己的日志，不是启动器的 `[判定]`：
+
+- `MaxListeners is 10` / `EventEmitter`：Node 警告，一般可忽略
+- `CursorProclistService`：进程监控已打开
+- `update#setState checking for updates` 然后 `idle`：查过更新，没有在装更新
+- `WorktreeCleanupMainService` + `window:1/2/3`：已经有多个窗口；若同时弹出好几个 Cursor，仍是新旧两套在抢
+
+Join in 成功的标志只有一个：企鹅窗口进入工作区/编辑器，不再停在登录页。
+
+如果黑框里全是 `[main]...`，完全没有 `[判定]` / `LAUNCH_OK`，说明还在跑旧版 bat。需要把 `Launch-Cursor-Linux.bat` **和** `launch-cursor-linux.sh` 一起覆盖到 `E:\CursorDownload`。
+
 ## 点 Join in 之后怎么才算成功
 
 1. 只用 **企鹅标那个 Linux Cursor 窗口** 里的 Sign in / Log in / Join in，不要自己另开 cursor.com。

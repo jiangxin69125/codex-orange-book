@@ -49,10 +49,20 @@ if not "%ERR%"=="0" (
 )
 
 echo.
-echo [2/2] Linux Cursor 应已弹出（窗口带企鹅标）。
-echo 请只点 Cursor 窗口里的 Sign in / Log in / Join in。
-echo 浏览器登录成功后停在 All set 是正常的，不要关企鹅窗口，等它自己进入。
-echo 日志: %LOG%
+echo ============================================
+echo  启动成功，但还不等于已经登录
+echo ============================================
+echo 企鹅窗口弹出来 / 黑框出现 [main] / EventEmitter / WorktreeCleanup
+echo / update#setState  =  只说明 Linux Cursor 进程已经起来。
+echo Join in 成功的标志：窗口进入工作区或编辑器，不再停在登录页。
 echo.
+echo 请只点企鹅窗口里的 Sign in / Log in / Join in。
+echo 浏览器停在 All set 是正常的，不要关企鹅窗口，等几秒让它自己进。
+echo.
+echo 如果黑框里完全没有 [判定] / [修复] / LAUNCH_OK，说明还在跑旧版 bat，
+echo 请把 launch-cursor-linux.sh 和本文件一起覆盖到 E:\CursorDownload。
+echo 诊断日志: %LOG%
+echo.
+pause
 endlocal
 exit /b 0

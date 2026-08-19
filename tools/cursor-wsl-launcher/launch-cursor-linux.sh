@@ -540,10 +540,20 @@ launch_cursor() {
   note "[启动] $bin ${args[*]}"
   if [[ "$DRY_RUN" -eq 1 ]]; then
     note "[dry-run] 不实际拉起 GUI"
+    note "LAUNCH_OK=dry-run LOGIN_OK=not_yet"
     return 0
   fi
-  nohup "$bin" "${args[@]}" >/dev/null 2>>"$LOG_FILE" &
+  local main_log="${LOG_FILE%.log}-main.log"
+  # Detach completely so Cursor [main]/EventEmitter logs do not flood the bat window.
+  # Those lines only mean the process started; they are not Join in / login success.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "$bin" "${args[@]}" </dev/null >>"$main_log" 2>&1 &
+  else
+    nohup "$bin" "${args[@]}" </dev/null >>"$main_log" 2>&1 &
+    disown $! 2>/dev/null || true
+  fi
   note "[启动] 已在后台拉起 Linux Cursor。点窗口里的 Sign in / Log in / Join in；浏览器登录后不要关 Cursor，等几秒让它自己进。"
+  note "LAUNCH_OK=process_started LOGIN_OK=not_yet main_log=$main_log"
 }
 
 parse_args() {

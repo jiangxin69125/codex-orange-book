@@ -150,6 +150,23 @@ fix_out="$(CURSOR_LAUNCHER_LOG="$WORKDIR/f.log" CURSOR_LINUX_BIN="$CURSOR_LINUX_
 printf '%s\n' "$fix_out" >"$WORKDIR/fix.txt"
 expect_file_contains "$WORKDIR/fix.txt" '[dry-run] 跳过写入修复' "dry-run skips writes"
 
+dry_launch="$(CURSOR_LAUNCHER_LOG="$WORKDIR/dl.log" CURSOR_LINUX_BIN="$CURSOR_LINUX_BIN" DISPLAY=":0" WINDOWS_HOST_IP="1.2.3.4" \
+  HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" \
+  "$WORKDIR/launch-cursor-linux.sh" --dry-run 2>&1)" || true
+printf '%s\n' "$dry_launch" >"$WORKDIR/dry-launch.txt"
+expect_file_contains "$WORKDIR/dry-launch.txt" 'LAUNCH_OK=dry-run LOGIN_OK=not_yet' "dry-run launch prints not-logged-in marker"
+
+if grep -q "还不等于已经登录" "$ROOT/Launch-Cursor-Linux.bat"; then
+  ok "bat tells user process logs are not login success"
+else
+  fail "bat tells user process logs are not login success"
+fi
+if grep -q "setsid" "$ROOT/launch-cursor-linux.sh"; then
+  ok "launcher detaches Cursor so [main] logs stay out of the bat window"
+else
+  fail "launcher detaches Cursor so [main] logs stay out of the bat window"
+fi
+
 # Real fix-only should write files into the fake HOME.
 CURSOR_LAUNCHER_LOG="$WORKDIR/fix2.log" CURSOR_LINUX_BIN="$CURSOR_LINUX_BIN" DISPLAY=":0" WINDOWS_HOST_IP="1.2.3.4" \
   HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" \
