@@ -43,6 +43,15 @@ expect_file_contains() {
   fi
 }
 
+expect_file_not_contains() {
+  local file="$1" needle="$2" name="$3"
+  if grep -F -- "$needle" "$file" >/dev/null; then
+    fail "$name (unexpected '$needle' in $file)"
+  else
+    ok "$name"
+  fi
+}
+
 expect_exit() {
   local want="$1" name="$2"
   shift 2
@@ -69,6 +78,10 @@ WINDOWS_HOST_IP="1.2.3.4"
 export WINDOWS_HOST_IP
 expect_eq "$(rewrite_loopback_proxy 'http://127.0.0.1:7890')" "http://1.2.3.4:7890" "rewrite 127.0.0.1 proxy to Windows host"
 expect_eq "$(rewrite_loopback_proxy 'http://localhost:7890')" "http://1.2.3.4:7890" "rewrite localhost proxy"
+expect_eq "$(rewrite_loopback_proxy 'http://user:pass@127.0.0.1:7890')" "http://user:pass@1.2.3.4:7890" "rewrite authenticated loopback proxy"
+expect_eq "$(rewrite_loopback_proxy 'user:pass@LOCALHOST:7890')" "user:pass@1.2.3.4:7890" "rewrite schemeless uppercase loopback proxy"
+expect_eq "$(rewrite_loopback_proxy 'socks5://[::1]:7890')" "socks5://1.2.3.4:7890" "rewrite IPv6 loopback proxy"
+expect_eq "$(rewrite_loopback_proxy 'http://localhost.example:7890')" "http://localhost.example:7890" "leave loopback-prefix hostname unchanged"
 expect_eq "$(rewrite_loopback_proxy 'http://10.0.0.8:7890')" "http://10.0.0.8:7890" "leave non-loopback proxy"
 
 echo "== unit: is_linux_cursor_bin =="
@@ -119,6 +132,123 @@ else
   ok "reject invalid JSONC instead of overwriting it"
 fi
 expect_eq "$(<"$CORRUPT_SETTINGS")" "$corrupt_before" "leave invalid JSONC unchanged"
+
+EMPTY_SETTINGS="$WORKDIR/empty-settings.json"
+: >"$EMPTY_SETTINGS"
+if patch_jsonc_settings "$EMPTY_SETTINGS" "" >/dev/null 2>&1; then
+  fail "reject empty existing settings file"
+else
+  ok "reject empty existing settings file"
+fi
+expect_eq "$(<"$EMPTY_SETTINGS")" "" "leave empty settings file unchanged"
+
+ARRAY_SETTINGS="$WORKDIR/array-settings.json"
+printf '[]\n' >"$ARRAY_SETTINGS"
+if patch_jsonc_settings "$ARRAY_SETTINGS" "" >/dev/null 2>&1; then
+  fail "reject non-object settings file"
+else
+  ok "reject non-object settings file"
+fi
+expect_eq "$(<"$ARRAY_SETTINGS")" "[]" "leave non-object settings file unchanged"
+
+NONFINITE_SETTINGS="$WORKDIR/nonfinite-settings.json"
+printf '{"custom.value": NaN}\n' >"$NONFINITE_SETTINGS"
+nonfinite_before="$(<"$NONFINITE_SETTINGS")"
+if patch_jsonc_settings "$NONFINITE_SETTINGS" "" >/dev/null 2>&1; then
+  fail "reject non-standard NaN value"
+else
+  ok "reject non-standard NaN value"
+fi
+expect_eq "$(<"$NONFINITE_SETTINGS")" "$nonfinite_before" "leave NaN settings file unchanged"
+
+printf '{"custom.value": 1e400}\n' >"$NONFINITE_SETTINGS"
+nonfinite_before="$(<"$NONFINITE_SETTINGS")"
+if patch_jsonc_settings "$NONFINITE_SETTINGS" "" >/dev/null 2>&1; then
+  fail "reject overflowing numeric value"
+else
+  ok "reject overflowing numeric value"
+fi
+expect_eq "$(<"$NONFINITE_SETTINGS")" "$nonfinite_before" "leave overflowing number unchanged"
+
+LINK_TARGET="$WORKDIR/linked-settings-target.json"
+LINK_SETTINGS="$WORKDIR/linked-settings.json"
+printf '{"editor.fontSize": 16}\n' >"$LINK_TARGET"
+ln -s "$LINK_TARGET" "$LINK_SETTINGS"
+patch_jsonc_settings "$LINK_SETTINGS" ""
+if [[ -L "$LINK_SETTINGS" ]]; then
+  ok "preserve settings symlink"
+else
+  fail "preserve settings symlink"
+fi
+expect_file_contains "$LINK_TARGET" '"cursor.general.disableHttp2": true' "update settings symlink target"
+expect_file_contains "$LINK_TARGET.cursor-wsl-launcher.bak" '"editor.fontSize": 16' "back up settings symlink target"
+
+echo "== unit: proxy diagnosis =="
+original_probe_url="$(declare -f probe_url)"
+original_log_file="$LOG_FILE"
+LOG_FILE="$WORKDIR/proxy-diagnosis.log"
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
+printf '{\n  "http.proxySupport": "on",\n  "http.proxy": "http://127.0.0.1:7890",\n}\n' >"$USER_SETTINGS"
+probe_url() { printf '204'; }
+diagnose_proxy >/dev/null
+expect_eq "$SELECTED_PROXY" "http://1.2.3.4:7890" "select rewritten settings-only loopback proxy"
+patch_jsonc_settings "$USER_SETTINGS" "$SELECTED_PROXY"
+expect_file_contains "$USER_SETTINGS" '"http.proxy": "http://1.2.3.4:7890"' "persist rewritten settings-only proxy"
+
+printf '{"http.proxySupport":"on","http.proxy":"http://audit-user:audit-secret@proxy.example:7890/path\\n?token=private"}\n' >"$USER_SETTINGS"
+: >"$LOG_FILE"
+diagnose_proxy >/dev/null
+expect_file_not_contains "$LOG_FILE" 'audit-secret' "redact settings proxy password from logs"
+expect_file_not_contains "$LOG_FILE" 'token=private' "redact settings proxy query from logs"
+expect_file_contains "$LOG_FILE" 'proxy=http://***@proxy.example:7890/path\n?***' "retain one-line safe settings proxy diagnostics"
+
+printf '{"http.proxySupport":"on"}\n' >"$USER_SETTINGS"
+: >"$LOG_FILE"
+export https_proxy='env-user:env-secret@proxy.example:7890?token=private'
+probe_url() {
+  if [[ $# -gt 1 ]]; then
+    printf '200'
+  else
+    printf '000'
+  fi
+}
+diagnose_proxy >/dev/null
+expect_file_not_contains "$LOG_FILE" 'env-secret' "redact environment proxy password from logs"
+expect_file_not_contains "$LOG_FILE" 'token=private' "redact environment proxy query from logs"
+expect_file_contains "$LOG_FILE" '***@proxy.example:7890?***' "retain safe schemeless proxy diagnostics"
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
+
+printf '%s\n' '{"http.proxySupport":"on","http.proxy":"http://nul-user:nul-secret@proxy.example/\u0000?token=private"}' >"$USER_SETTINGS"
+: >"$LOG_FILE"
+probe_url() { printf '204'; }
+diagnose_proxy >/dev/null
+expect_file_not_contains "$LOG_FILE" 'nul-secret' "drop NUL-containing proxy credentials from logs"
+expect_file_not_contains "$LOG_FILE" 'token=private' "drop NUL-delimited proxy query from logs"
+
+eval "$original_probe_url"
+LOG_FILE="$original_log_file"
+
+echo "== unit: curl proxy isolation =="
+MOCK_CURL="$WORKDIR/bin/curl"
+CURL_ARGS_FILE="$WORKDIR/curl-args.txt"
+cat >"$MOCK_CURL" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$CURL_ARGS_FILE"
+printf '%s' "${MOCK_CURL_CODE:-204}"
+exit "${MOCK_CURL_EXIT:-0}"
+EOF
+chmod +x "$MOCK_CURL"
+export CURL_ARGS_FILE
+export https_proxy="http://required-proxy.example:7890"
+PATH="$WORKDIR/bin:$PATH" probe_url "https://api2.cursor.sh" >/dev/null
+expect_file_contains "$CURL_ARGS_FILE" '--noproxy' "direct probe overrides proxy environment"
+expect_file_contains "$CURL_ARGS_FILE" '*' "direct probe bypasses every proxy"
+PATH="$WORKDIR/bin:$PATH" probe_url "https://api2.cursor.sh" "http://explicit-proxy.example:7890" >/dev/null
+expect_file_contains "$CURL_ARGS_FILE" '--proxy' "proxy probe selects explicit proxy"
+expect_file_contains "$CURL_ARGS_FILE" 'http://explicit-proxy.example:7890' "proxy probe passes selected proxy"
+failed_probe="$(MOCK_CURL_CODE=000 MOCK_CURL_EXIT=7 PATH="$WORKDIR/bin:$PATH" probe_url "https://api2.cursor.sh")"
+expect_eq "$failed_probe" "000" "failed curl probe returns one failure code"
+unset https_proxy CURL_ARGS_FILE
 
 echo "== unit: url bridge script =="
 SCRIPT_DIR="$WORKDIR"

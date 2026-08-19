@@ -111,7 +111,37 @@ rewrite_loopback_proxy() {
     printf '%s' "$value"
     return
   fi
-  printf '%s' "$value" | sed -E "s#://(127\\.0\\.0\\.1|localhost)#://$host#g"
+  python3 - "$value" "$host" <<'PY'
+import re, sys
+
+value, host = sys.argv[1:3]
+authority = re.compile(
+    r"^((?:[a-z][a-z0-9+.-]*://)?(?:[^/@\s]+@)?)"
+    r"(localhost|127\.0\.0\.1|\[::1\])(?=:\d+|$)(.*)$",
+    re.IGNORECASE,
+)
+print(authority.sub(lambda match: match.group(1) + host + match.group(3), value), end="")
+PY
+}
+
+redact_proxy_url() {
+  local value="${1:-}"
+  python3 - "$value" <<'PY'
+import re, sys
+
+value = sys.argv[1]
+value = re.sub(
+    r"^((?:[a-z][a-z0-9+.-]*://)?)[^/@\s]+@",
+    lambda match: match.group(1) + "***@",
+    value,
+    flags=re.IGNORECASE,
+)
+if "?" in value:
+    value = value.partition("?")[0] + "?***"
+elif "#" in value:
+    value = value.partition("#")[0] + "#***"
+print(value.replace("\r", r"\r").replace("\n", r"\n"), end="")
+PY
 }
 
 is_linux_cursor_bin() {
@@ -312,7 +342,7 @@ patch_jsonc_file() {
   local proxy_value="${3:-}"
   mkdir -p "$(dirname "$path")"
   python3 - "$path" "$mode" "$proxy_value" <<'PY'
-import json, os, pathlib, shutil, stat, sys, tempfile
+import json, math, os, pathlib, shutil, stat, sys, tempfile
 
 path = pathlib.Path(sys.argv[1])
 mode = sys.argv[2]
@@ -393,9 +423,29 @@ def strip_jsonc(text):
     return "".join(without_trailing_commas)
 
 
-raw = path.read_text(encoding="utf-8") if path.exists() else "{}"
+def reject_non_standard_number(value):
+    raise ValueError(f"non-standard number {value}")
+
+
+if path.is_symlink():
+    try:
+        storage_path = path.resolve(strict=True)
+    except FileNotFoundError:
+        print(f"ERROR: refusing to overwrite broken symlink {path}", file=sys.stderr)
+        raise SystemExit(1)
+else:
+    storage_path = path
+
+exists = storage_path.exists()
+raw = storage_path.read_text(encoding="utf-8") if exists else "{}"
+if exists and not raw.strip():
+    print(f"ERROR: refusing to overwrite empty JSONC file {path}", file=sys.stderr)
+    raise SystemExit(1)
 try:
-    data = json.loads(strip_jsonc(raw)) if raw.strip() else {}
+    data = json.loads(
+        strip_jsonc(raw),
+        parse_constant=reject_non_standard_number,
+    )
 except (json.JSONDecodeError, ValueError) as error:
     print(f"ERROR: refusing to overwrite invalid JSONC file {path}: {error}", file=sys.stderr)
     raise SystemExit(1)
@@ -403,7 +453,34 @@ if not isinstance(data, dict):
     print(f"ERROR: refusing to overwrite non-object JSONC file {path}", file=sys.stderr)
     raise SystemExit(1)
 
-if mode == "settings":
+def contains_non_finite(value):
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, dict):
+        return any(contains_non_finite(item) for item in value.values())
+    if isinstance(value, list):
+        return any(contains_non_finite(item) for item in value)
+    return False
+
+
+if contains_non_finite(data):
+    print(f"ERROR: refusing to overwrite JSONC with non-finite numbers {path}", file=sys.stderr)
+    raise SystemExit(1)
+
+if mode == "read-proxy":
+    values = (
+        data.get("http.proxySupport", ""),
+        data.get("http.proxy", ""),
+        data.get("cursor.general.disableHttp2", ""),
+    )
+    for value in values:
+        if not isinstance(value, (str, bool, int, float)):
+            value = ""
+        if "\0" in str(value):
+            value = ""
+        sys.stdout.buffer.write(str(value).encode("utf-8") + b"\0")
+    raise SystemExit(0)
+elif mode == "settings":
     data.update({
         "http.proxySupport": "on",
         "cursor.general.disableHttp2": True,
@@ -416,20 +493,25 @@ else:
     print(f"ERROR: unsupported JSONC patch mode: {mode}", file=sys.stderr)
     raise SystemExit(2)
 
-if path.exists():
-    shutil.copy2(path, path.with_name(path.name + ".cursor-wsl-launcher.bak"))
+if exists:
+    shutil.copy2(
+        storage_path,
+        storage_path.with_name(storage_path.name + ".cursor-wsl-launcher.bak"),
+    )
 
-descriptor, temporary_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+descriptor, temporary_name = tempfile.mkstemp(
+    prefix=storage_path.name + ".", dir=storage_path.parent
+)
 temporary = pathlib.Path(temporary_name)
 try:
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-        json.dump(data, stream, indent=2, ensure_ascii=False)
+        json.dump(data, stream, indent=2, ensure_ascii=False, allow_nan=False)
         stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())
-    if path.exists():
-        os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
-    os.replace(temporary, path)
+    if exists:
+        os.chmod(temporary, stat.S_IMODE(storage_path.stat().st_mode))
+    os.replace(temporary, storage_path)
 finally:
     if temporary.exists():
         temporary.unlink()
@@ -444,13 +526,24 @@ patch_argv_json() {
   patch_jsonc_file "$1" argv
 }
 
+read_cursor_proxy_settings() {
+  patch_jsonc_file "$1" read-proxy
+}
+
 probe_url() {
   local url="$1"
   local extra=()
+  local code
   if [[ -n "${2:-}" ]]; then
-    extra+=(--proxy "$2")
+    extra+=(--noproxy "" --proxy "$2")
+  else
+    extra+=(--noproxy "*")
   fi
-  curl -sI -o /dev/null -w "%{http_code}" --max-time 8 --connect-timeout 5 "${extra[@]}" "$url" 2>/dev/null || printf '000'
+  if code="$(curl -sI -o /dev/null -w "%{http_code}" --max-time 8 --connect-timeout 5 "${extra[@]}" "$url" 2>/dev/null)"; then
+    printf '%s' "${code:-000}"
+  else
+    printf '000'
+  fi
 }
 
 current_http_handler() {
@@ -499,8 +592,9 @@ diagnose_browser() {
 
 diagnose_proxy() {
   local raw="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
-  local rewritten
+  local rewritten safe_rewritten
   rewritten="$(rewrite_loopback_proxy "$raw")"
+  safe_rewritten="$(redact_proxy_url "$rewritten")"
   local code_direct code_proxy
   code_direct="$(probe_url https://api2.cursor.sh)"
   if [[ -n "$rewritten" ]]; then
@@ -508,22 +602,16 @@ diagnose_proxy() {
   else
     code_proxy="skip"
   fi
-  local settings_proxy=""
+  local settings_values=()
   if [[ -f "$USER_SETTINGS" ]]; then
-    settings_proxy="$(python3 - "$USER_SETTINGS" <<'PY' || true
-import json, pathlib, re, sys
-p = pathlib.Path(sys.argv[1])
-raw = p.read_text(encoding="utf-8")
-body = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-body = re.sub(r"^\s*//.*$", "", body, flags=re.M)
-try:
-    data = json.loads(body)
-except Exception:
-    data = {}
-print(data.get("http.proxySupport", ""), data.get("http.proxy", ""), data.get("cursor.general.disableHttp2", ""))
-PY
-)"
+    mapfile -d '' -t settings_values < <(read_cursor_proxy_settings "$USER_SETTINGS" 2>/dev/null || true)
   fi
+  local settings_support="${settings_values[0]:-}"
+  local settings_url="${settings_values[1]:-}"
+  local settings_http2="${settings_values[2]:-}"
+  local rewritten_settings safe_settings_url
+  rewritten_settings="$(rewrite_loopback_proxy "$settings_url")"
+  safe_settings_url="$(redact_proxy_url "$settings_url")"
 
   if [[ "$code_direct" != "000" && -n "$code_direct" ]]; then
     AUTH_VERDICT="ok"
@@ -534,15 +622,19 @@ PY
   if [[ -n "$raw" && "$raw" != "$rewritten" ]]; then
     PROXY_VERDICT="bad"
     SELECTED_PROXY="$rewritten"
-    note "[判定] 登录轮询/代理: 异常 (环境变量代理指向 127.0.0.1，在 WSL2 里打不到 Windows 代理。将改写为 $rewritten)"
-  elif [[ "$settings_proxy" == override* || "$settings_proxy" == *"override"* ]]; then
+    note "[判定] 登录轮询/代理: 异常 (环境变量代理指向 127.0.0.1，在 WSL2 里打不到 Windows 代理。将改写为 $safe_rewritten)"
+  elif [[ -n "$settings_url" && "$settings_url" != "$rewritten_settings" ]]; then
+    PROXY_VERDICT="bad"
+    SELECTED_PROXY="$rewritten_settings"
+    note "[判定] 登录轮询/代理: 异常 (Cursor http.proxy 指向 WSL2 本机，无法访问 Windows 代理。将改写为 $(redact_proxy_url "$rewritten_settings"))"
+  elif [[ "$settings_support" == "override" ]]; then
     PROXY_VERDICT="bad"
     SELECTED_PROXY="$rewritten"
     note "[判定] 登录轮询/代理: 异常 (http.proxySupport=override 会挡住 Linux Cursor 后台 poll，官方常见根因)"
   elif [[ "$code_direct" == "000" && "$code_proxy" != "skip" && "$code_proxy" != "000" ]]; then
     PROXY_VERDICT="bad"
     SELECTED_PROXY="$rewritten"
-    note "[判定] 登录轮询/代理: 异常 (直连 api2.cursor.sh 失败，经 $rewritten 成功 HTTP $code_proxy)"
+    note "[判定] 登录轮询/代理: 异常 (直连 api2.cursor.sh 失败，经 $safe_rewritten 成功 HTTP $code_proxy)"
   elif [[ "$code_direct" == "000" && ( "$code_proxy" == "skip" || "$code_proxy" == "000" ) ]]; then
     PROXY_VERDICT="bad"
     note "[判定] 登录轮询/代理: 异常 (直连和代理都访问不了 api2.cursor.sh，Join in 后必然卡在登录页)"
@@ -551,7 +643,7 @@ PY
     SELECTED_PROXY=""
     note "[判定] 登录轮询/代理: 正常 (api2.cursor.sh HTTP $code_direct；将强制 http.proxySupport=on 并关闭 HTTP/2 以免 Electron 默认值再挡住)"
   fi
-  note "[信息] 当前 Cursor settings: ${settings_proxy:-<none>}"
+  note "[信息] 当前 Cursor settings: proxySupport=${settings_support:-<none>} proxy=${safe_settings_url:-<none>} disableHttp2=${settings_http2:-<none>}"
 }
 
 diagnose_binary() {
