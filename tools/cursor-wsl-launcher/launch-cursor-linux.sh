@@ -306,52 +306,142 @@ path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
 PY
 }
 
-patch_jsonc_settings() {
+patch_jsonc_file() {
   local path="$1"
-  local proxy_value="${2:-}"
+  local mode="$2"
+  local proxy_value="${3:-}"
   mkdir -p "$(dirname "$path")"
-  python3 - "$path" "$proxy_value" <<'PY'
-import json, pathlib, re, sys
+  python3 - "$path" "$mode" "$proxy_value" <<'PY'
+import json, os, pathlib, shutil, stat, sys, tempfile
+
 path = pathlib.Path(sys.argv[1])
-proxy = sys.argv[2]
-updates = {
-    "http.proxySupport": "on",
-    "cursor.general.disableHttp2": True,
-}
-if proxy:
-    updates["http.proxy"] = proxy
-raw = path.read_text(encoding="utf-8") if path.exists() else "{\n}\n"
-body = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-body = re.sub(r"^\s*//.*$", "", body, flags=re.M)
+mode = sys.argv[2]
+proxy = sys.argv[3]
+
+
+def strip_jsonc(text):
+    """Remove JSONC comments and trailing commas without touching strings."""
+    without_comments = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            without_comments.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            without_comments.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < len(text):
+            next_char = text[index + 1]
+            if next_char == "/":
+                index += 2
+                while index < len(text) and text[index] not in "\r\n":
+                    index += 1
+                continue
+            if next_char == "*":
+                index += 2
+                while index + 1 < len(text) and text[index:index + 2] != "*/":
+                    if text[index] in "\r\n":
+                        without_comments.append(text[index])
+                    index += 1
+                if index + 1 >= len(text):
+                    raise ValueError("unterminated block comment")
+                index += 2
+                continue
+        without_comments.append(char)
+        index += 1
+
+    cleaned = "".join(without_comments)
+    without_trailing_commas = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(cleaned):
+        char = cleaned[index]
+        if in_string:
+            without_trailing_commas.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+        elif char == ",":
+            lookahead = index + 1
+            while lookahead < len(cleaned) and cleaned[lookahead].isspace():
+                lookahead += 1
+            if lookahead < len(cleaned) and cleaned[lookahead] in "}]":
+                index += 1
+                continue
+        without_trailing_commas.append(char)
+        index += 1
+    return "".join(without_trailing_commas)
+
+
+raw = path.read_text(encoding="utf-8") if path.exists() else "{}"
 try:
-    data = json.loads(body) if body.strip() else {}
-    if not isinstance(data, dict):
-        data = {}
-except Exception:
-    data = {}
-data.update(updates)
-path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    data = json.loads(strip_jsonc(raw)) if raw.strip() else {}
+except (json.JSONDecodeError, ValueError) as error:
+    print(f"ERROR: refusing to overwrite invalid JSONC file {path}: {error}", file=sys.stderr)
+    raise SystemExit(1)
+if not isinstance(data, dict):
+    print(f"ERROR: refusing to overwrite non-object JSONC file {path}", file=sys.stderr)
+    raise SystemExit(1)
+
+if mode == "settings":
+    data.update({
+        "http.proxySupport": "on",
+        "cursor.general.disableHttp2": True,
+    })
+    if proxy:
+        data["http.proxy"] = proxy
+elif mode == "argv":
+    data.setdefault("disable-hardware-acceleration", True)
+else:
+    print(f"ERROR: unsupported JSONC patch mode: {mode}", file=sys.stderr)
+    raise SystemExit(2)
+
+if path.exists():
+    shutil.copy2(path, path.with_name(path.name + ".cursor-wsl-launcher.bak"))
+
+descriptor, temporary_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+temporary = pathlib.Path(temporary_name)
+try:
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump(data, stream, indent=2, ensure_ascii=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    if path.exists():
+        os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
+    os.replace(temporary, path)
+finally:
+    if temporary.exists():
+        temporary.unlink()
 PY
 }
 
+patch_jsonc_settings() {
+  patch_jsonc_file "$1" settings "${2:-}"
+}
+
 patch_argv_json() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  python3 - "$path" <<'PY'
-import json, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-data = {}
-if path.exists():
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        data = {}
-if not isinstance(data, dict):
-    data = {}
-# WSLg + Electron often needs this so the login window keeps receiving clicks.
-data.setdefault("disable-hardware-acceleration", True)
-path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PY
+  patch_jsonc_file "$1" argv
 }
 
 probe_url() {

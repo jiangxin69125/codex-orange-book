@@ -88,19 +88,37 @@ fi
 
 echo "== unit: settings + mime patch =="
 USER_SETTINGS="$XDG_CONFIG_HOME/Cursor/User/settings.json"
+ARGV_JSON="$XDG_CONFIG_HOME/Cursor/argv.json"
 MIME_FILE="$XDG_CONFIG_HOME/mimeapps.list"
 APPS_DIR="$XDG_DATA_HOME/applications"
 mkdir -p "$(dirname "$USER_SETTINGS")" "$APPS_DIR"
-printf '{\n  // comment\n  "editor.fontSize": 14,\n  "http.proxySupport": "override"\n}\n' >"$USER_SETTINGS"
+printf '{\n  // comment\n  "editor.fontSize": 14,\n  "docs.url": "https://example.test/a//b",\n  "http.proxySupport": "override",\n}\n' >"$USER_SETTINGS"
+printf '{\n  "disable-color-correct-rendering": true,\n}\n' >"$ARGV_JSON"
 printf '[Default Applications]\nx-scheme-handler/https=discover.desktop\n' >"$MIME_FILE"
 patch_jsonc_settings "$USER_SETTINGS" "http://1.2.3.4:7890"
+patch_argv_json "$ARGV_JSON"
 upsert_mime_default "$MIME_FILE"
 expect_file_contains "$USER_SETTINGS" '"http.proxySupport": "on"' "force proxySupport=on"
 expect_file_contains "$USER_SETTINGS" '"cursor.general.disableHttp2": true' "disable HTTP/2"
 expect_file_contains "$USER_SETTINGS" '"http.proxy": "http://1.2.3.4:7890"' "write rewritten proxy"
 expect_file_contains "$USER_SETTINGS" '"editor.fontSize": 14' "preserve existing setting"
+expect_file_contains "$USER_SETTINGS" '"docs.url": "https://example.test/a//b"' "preserve comment-like text inside strings"
+expect_file_contains "$ARGV_JSON" '"disable-color-correct-rendering": true' "preserve existing argv setting"
+expect_file_contains "$ARGV_JSON" '"disable-hardware-acceleration": true' "write required argv setting"
+expect_file_contains "$USER_SETTINGS.cursor-wsl-launcher.bak" '"editor.fontSize": 14' "back up settings before rewrite"
+expect_file_contains "$ARGV_JSON.cursor-wsl-launcher.bak" '"disable-color-correct-rendering": true' "back up argv before rewrite"
 expect_file_contains "$MIME_FILE" 'x-scheme-handler/https=cursor-wsl-windows-browser.desktop' "https handler -> Windows bridge"
 expect_file_contains "$MIME_FILE" 'x-scheme-handler/http=cursor-wsl-windows-browser.desktop' "http handler -> Windows bridge"
+
+CORRUPT_SETTINGS="$WORKDIR/corrupt-settings.json"
+printf '{ this is not JSONC }\n' >"$CORRUPT_SETTINGS"
+corrupt_before="$(<"$CORRUPT_SETTINGS")"
+if patch_jsonc_settings "$CORRUPT_SETTINGS" "" >/dev/null 2>&1; then
+  fail "reject invalid JSONC instead of overwriting it"
+else
+  ok "reject invalid JSONC instead of overwriting it"
+fi
+expect_eq "$(<"$CORRUPT_SETTINGS")" "$corrupt_before" "leave invalid JSONC unchanged"
 
 echo "== unit: url bridge script =="
 SCRIPT_DIR="$WORKDIR"
