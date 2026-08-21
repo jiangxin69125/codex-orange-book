@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 import markdown
@@ -52,6 +53,28 @@ def render_readme() -> str:
         output_format="html5",
     )
     return md.convert(text)
+
+
+def export_pdf(input_html: Path, output_pdf: Path) -> None:
+    """用 Chrome 导出 PDF，成功后再原子替换已有文件。"""
+    with tempfile.TemporaryDirectory(
+        prefix=".build-pdf-",
+        dir=output_pdf.parent,
+    ) as temp_dir:
+        temp_pdf = Path(temp_dir) / output_pdf.name
+        subprocess.run(
+            [
+                CHROME,
+                "--headless",
+                "--disable-gpu",
+                "--no-pdf-header-footer",
+                f"--print-to-pdf={temp_pdf}",
+                input_html.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        temp_pdf.replace(output_pdf)
 
 
 # 整本书的打印 CSS：封面命名页满版，正文页带页边距
@@ -182,18 +205,7 @@ def build() -> None:
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
-    subprocess.run(
-        [
-            CHROME,
-            "--headless",
-            "--disable-gpu",
-            "--no-pdf-header-footer",
-            f"--print-to-pdf={OUTPUT_PDF}",
-            BOOK_HTML.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-    )
+    export_pdf(BOOK_HTML, OUTPUT_PDF)
     size_kb = OUTPUT_PDF.stat().st_size / 1024
     print(f"已导出 {OUTPUT_PDF.name}（{size_kb:.0f} KB）")
 
