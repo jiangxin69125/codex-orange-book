@@ -1751,10 +1751,12 @@ codex --sandbox danger-full-access
 | `codex exec resume --last` | 恢复最近一次 exec 会话 | 接着最近任务继续 | 最常用恢复方式 |
 
 
+> **注意：`codex exec` 不会等待人工批准。** 它是非交互模式，即使普通交互会话设置了 `on-request`，执行命令时也不会停下来询问；而且受信任项目默认允许写入工作区。只做检查或生成报告时，请显式使用 `codex exec --sandbox read-only "任务"`。只有在工作区干净、已有备份且任务经过审查的隔离环境中，才使用 `workspace-write`。
+
 示例：
 
 ```text
-codex exec "请检查当前项目有没有明显问题"
+codex exec --sandbox read-only "请检查当前项目有没有明显问题"
 ```
 
 小白阶段优先用：
