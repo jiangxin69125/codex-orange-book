@@ -34,12 +34,34 @@ def extract_cover() -> tuple[str, str]:
     body = re.search(r"<body>(.*?)</body>", raw, re.S).group(1)
 
     # 1) 移除封面自带的 @page（整本书的分页由下方书籍 CSS 统一定义）
-    style = re.sub(r"@page\s*\{[^}]*\}", "", style, count=1)
+    style, page_count = re.subn(r"@page\s*\{[^}]*\}", "", style)
     # 2) 通配符重置只能作用于封面内部，否则会清掉正文所有边距
-    style = style.replace("* { margin: 0; padding: 0; box-sizing: border-box; }",
-                          ".cover, .cover * { margin: 0; padding: 0; box-sizing: border-box; }")
+    style, reset_count = re.subn(
+        r"(?m)^[ \t]*\*\s*\{\s*margin\s*:\s*0\s*;\s*padding\s*:\s*0\s*;"
+        r"\s*box-sizing\s*:\s*border-box\s*;\s*\}",
+        ".cover, .cover * { margin: 0; padding: 0; box-sizing: border-box; }",
+        style,
+    )
     # 3) 原 html,body 负责的字体/底色/尺寸，改挂到 .cover 上
-    style = style.replace("html, body {", ".cover {")
+    style, document_count = re.subn(
+        r"(?m)^[ \t]*html\s*,\s*body\s*\{",
+        ".cover {",
+        style,
+    )
+
+    rewrite_counts = {
+        "@page": page_count,
+        "global reset": reset_count,
+        "html/body selector": document_count,
+    }
+    failed_rewrites = [
+        f"{name} ({count} matches)" for name, count in rewrite_counts.items() if count != 1
+    ]
+    if failed_rewrites:
+        raise RuntimeError(
+            "Cover CSS rewrite failed; expected exactly one match for "
+            + ", ".join(failed_rewrites)
+        )
 
     return style, body
 
