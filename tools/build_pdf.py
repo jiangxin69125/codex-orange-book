@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import re
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import markdown
 
@@ -23,6 +25,46 @@ BOOK_HTML = ROOT / "book.html"
 OUTPUT_PDF = ROOT / "Codex橙皮书.pdf"
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+
+class ImageSourceParser(HTMLParser):
+    """Collect image sources from rendered HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sources: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "img":
+            return
+        for name, value in attrs:
+            if name.lower() == "src" and value:
+                self.sources.append(value)
+
+
+def validate_local_images(document: str, base_dir: Path) -> None:
+    """Fail with every missing local image referenced by rendered HTML."""
+    parser = ImageSourceParser()
+    parser.feed(document)
+
+    missing: list[tuple[str, Path]] = []
+    for source in parser.sources:
+        parsed = urlsplit(source)
+        if parsed.scheme not in ("", "file") or (parsed.netloc and parsed.scheme != "file"):
+            continue
+
+        image_path = Path(unquote(parsed.path))
+        if not image_path.parts:
+            continue
+        if not image_path.is_absolute():
+            image_path = base_dir / image_path
+        image_path = image_path.resolve()
+        if not image_path.is_file():
+            missing.append((source, image_path))
+
+    if missing:
+        details = "\n".join(f"- {source} -> {path}" for source, path in missing)
+        raise FileNotFoundError(f"Missing local image assets:\n{details}")
 
 
 def extract_cover() -> tuple[str, str]:
@@ -179,6 +221,7 @@ def build() -> None:
 </body>
 </html>
 """
+    validate_local_images(document, BOOK_HTML.parent)
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
