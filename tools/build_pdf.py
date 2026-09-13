@@ -10,10 +10,8 @@
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
-import time
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -44,26 +42,10 @@ class ImageSourceParser(HTMLParser):
                 self.sources.append(value)
 
 
-def _debug_log(hypothesis_id: str, location: str, message: str, data: dict[str, object]) -> None:
-    payload = {
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }
-    with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as log_file:
-        log_file.write(json.dumps(payload) + "\n")
-
-
 def validate_local_images(document: str, base_dir: Path) -> None:
     """Fail with every missing local image referenced by rendered HTML."""
     parser = ImageSourceParser()
     parser.feed(document)
-    # region agent log
-    _debug_log("A", "tools/build_pdf.py:validate_local_images:entry",
-               "Rendered image references parsed", {"references": len(parser.sources)})
-    # endregion
 
     missing: list[tuple[str, Path]] = []
     for source in parser.sources:
@@ -80,10 +62,6 @@ def validate_local_images(document: str, base_dir: Path) -> None:
         if not image_path.is_file():
             missing.append((source, image_path))
 
-    # region agent log
-    _debug_log("A", "tools/build_pdf.py:validate_local_images:exit",
-               "Local image availability checked", {"missing": len(missing)})
-    # endregion
     if missing:
         details = "\n".join(f"- {source} -> {path}" for source, path in missing)
         raise FileNotFoundError(f"Missing local image assets:\n{details}")
@@ -244,17 +222,9 @@ def build() -> None:
 </html>
 """
     validate_local_images(document, BOOK_HTML.parent)
-    # region agent log
-    _debug_log("C", "tools/build_pdf.py:build:write",
-               "Writing validated rendered HTML", {"characters": len(document)})
-    # endregion
     BOOK_HTML.write_text(document, encoding="utf-8")
     print(f"已生成 {BOOK_HTML.relative_to(ROOT)}（{len(document)} 字节）")
 
-    # region agent log
-    _debug_log("B", "tools/build_pdf.py:build:chrome",
-               "Launching Chrome after asset validation", {})
-    # endregion
     subprocess.run(
         [
             CHROME,
