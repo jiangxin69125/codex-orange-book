@@ -1828,6 +1828,18 @@ codex update
 | `codex plugin add` | 安装插件 | 进阶 |
 | `codex plugin remove` | 删除插件 | 进阶 |
 
+使用 `codex apply` 前，必须先在终端里明确进入目标仓库并确认位置：
+
+```text
+cd D:\AI-Codex-Projects\hello-Codex
+git rev-parse --show-toplevel
+git status
+codex apply 任务ID
+git diff
+```
+
+不要使用 `codex -C 项目路径 apply 任务ID` 代替 `cd`。当前版本的 Codex CLI 在执行 `apply` 时可能忽略根命令的 `-C` / `--cd`，把 diff 应用到终端当前所在的另一个仓库。
+
 
 小白阶段先不用管这些。
 
@@ -5309,7 +5321,9 @@ Codex 云端运行，本质上是：
 
 ##### 本地修改前先同步 GitHub 仓库里的最新代码
 
-如果云端任务已经把修改推回 GitHub，本地继续开发前要先同步最新代码，避免在旧版本上继续修改导致冲突。具体是 Codex 自动帮你应用变更，还是你手动 `git pull` / `codex apply`，取决于当前入口和任务类型。
+如果云端任务已经把修改推回 GitHub，本地继续开发前先运行 `git status`，确认没有未保存的修改，再用 `git pull --ff-only` 同步远端提交。不要再对同一任务运行 `codex apply`。
+
+只有云端任务尚未推回 GitHub、需要把任务 diff 直接应用到本地时，才使用 `codex apply`。执行前必须先 `cd` 到目标仓库，用 `git rev-parse --show-toplevel` 和 `git status` 确认位置；执行后用 `git diff` 检查结果。不要依赖根命令的 `-C` / `--cd`，当前版本的 Codex CLI 在 `apply` 路径中可能忽略该目录参数。
 
 <p align="center">
   <img src="assets/images/image-070-548c4bfced.png" alt="Codex云端运行操作界面" width="860">
