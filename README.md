@@ -4642,14 +4642,19 @@ MCP Server = Codex 可以调用的外部工具服务。
 | Name | MCP 名称 | 给这个工具起名字 |
 | Command / URL | 启动命令或服务地址 | Codex 通过它连接工具 |
 | Type | MCP 类型 | 本地命令型或远程 HTTP 型 |
-| Env | 环境变量 | 放 token、配置项等 |
-| Auth | 授权方式 | 是否需要登录外部账号 |
+| Env | 固定环境变量 | 值会明文保存到配置文件；只放非敏感配置，不要放 token、API Key 或密码 |
+| 环境变量传递 | 传递已有环境变量 | 只填写变量名，让 MCP 从启动 Codex 时的环境读取敏感凭证 |
+| Auth | 授权方式 | 优先使用 OAuth；远程 HTTP MCP 可使用服务支持的 token 环境变量 |
 | Enabled tools | 启用哪些工具 | 只打开需要的功能 |
 
 
 <p align="center">
   <img src="assets/images/image-048-d6664c35fe.png" alt="Codex App中添加MCP时的设置界面" width="860">
 </p>
+
+不要把 token、API Key 或密码直接填进 Env 的“值”字段。固定 Env 值会写入 `~/.codex/config.toml`；即使文件默认只允许当前用户读取，分享配置、备份目录或提交配置文件时仍可能泄露凭证。
+
+敏感凭证应先设置为系统或终端环境变量，再在“环境变量传递”里只填写变量名。远程 HTTP MCP 优先使用 OAuth；如果服务支持 bearer token 环境变量，也只配置变量名，不要把 token 本身写进配置。
 
 ##### 添加 MCP 后怎么使用
 
@@ -4888,6 +4893,8 @@ args = ["-y", "@upstash/context7-mcp"]
 有一个 MCP server 叫 context7。
 启动命令是 npx -y @upstash/context7-mcp。
 ```
+
+`config.toml` 可能包含 MCP 启动命令和固定环境变量值。不要公开、上传或提交这个文件；如果曾把敏感值直接写进固定 Env，请先轮换对应凭证，再改用环境变量传递或 OAuth。
 
 如果你不熟悉配置文件，前期不要手动乱改。
 
