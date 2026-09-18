@@ -10,9 +10,12 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
-from pathlib import Path
+from html.parser import HTMLParser
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 import markdown
 
@@ -21,8 +24,198 @@ README = ROOT / "README.md"
 COVER = ROOT / "cover.html"
 BOOK_HTML = ROOT / "book.html"
 OUTPUT_PDF = ROOT / "Codex橙皮书.pdf"
+ASSETS = ROOT / "assets"
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+CHROME_TIMEOUT_SECONDS = 300
+GIT_TIMEOUT_SECONDS = 10
+
+ALLOWED_HTML_ATTRIBUTES = {
+    "a": {"href"},
+    "blockquote": set(),
+    "br": set(),
+    "code": {"class"},
+    "div": {"class"},
+    "em": set(),
+    "footer": {"class"},
+    "h1": {"class"},
+    "h2": {"class"},
+    "h3": {"class"},
+    "h4": {"class"},
+    "h5": {"class"},
+    "h6": {"class"},
+    "header": {"class"},
+    "hr": set(),
+    "img": {"alt", "height", "src", "width"},
+    "li": set(),
+    "nav": {"class"},
+    "ol": {"start"},
+    "p": {"align", "class"},
+    "pre": set(),
+    "section": {"class"},
+    "span": {"class"},
+    "strong": set(),
+    "table": set(),
+    "tbody": set(),
+    "td": set(),
+    "th": set(),
+    "thead": set(),
+    "tr": set(),
+    "ul": set(),
+}
+
+CONTENT_SECURITY_POLICY = (
+    "default-src 'none'; "
+    "img-src file: data:; "
+    "style-src 'unsafe-inline'; "
+    "font-src 'none'; "
+    "script-src 'none'; "
+    "object-src 'none'; "
+    "frame-src 'none'; "
+    "media-src 'none'; "
+    "connect-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'none'"
+)
+
+CSS_COMMENTS = re.compile(r"/\*.*?\*/", flags=re.S)
+CSS_RESOURCE_CONSTRUCT = re.compile(
+    r"(?:@import\b|(?<![\w-])(?:url|src|image|cross-fade|(?:-[a-z]+-)?image-set)\s*\()",
+    flags=re.I,
+)
+
+
+def checked_in_asset_paths() -> set[str]:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--", "assets/"],
+        check=True,
+        capture_output=True,
+        timeout=GIT_TIMEOUT_SECONDS,
+    )
+    return {
+        os.fsdecode(path)
+        for path in result.stdout.split(b"\0")
+        if path
+    }
+
+
+class SafeHtmlValidator(HTMLParser):
+    """Reject active HTML and local resources outside the checked-in assets."""
+
+    def __init__(self, source: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.source = source
+        self.checked_in_assets: set[str] | None = None
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        tag = tag.lower()
+        if tag not in ALLOWED_HTML_ATTRIBUTES:
+            raise ValueError(f"{self.source} contains unsupported HTML tag <{tag}>")
+
+        allowed_attributes = ALLOWED_HTML_ATTRIBUTES[tag]
+        for name, value in attrs:
+            name = name.lower()
+            if name not in allowed_attributes:
+                raise ValueError(
+                    f"{self.source} contains unsupported attribute {name!r} on <{tag}>"
+                )
+            if value is None:
+                raise ValueError(
+                    f"{self.source} contains an empty {name!r} attribute on <{tag}>"
+                )
+            if tag == "img" and name == "src":
+                self._validate_image_source(value)
+            elif tag == "a" and name == "href":
+                self._validate_link(value)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag not in ALLOWED_HTML_ATTRIBUTES:
+            raise ValueError(f"{self.source} contains unsupported HTML tag </{tag}>")
+
+    def handle_decl(self, decl: str) -> None:
+        raise ValueError(f"{self.source} contains unsupported declaration <!{decl}>")
+
+    def handle_pi(self, data: str) -> None:
+        raise ValueError(f"{self.source} contains unsupported processing instruction")
+
+    def _validate_image_source(self, source: str) -> None:
+        parsed = urlsplit(source)
+        if parsed.scheme or parsed.netloc:
+            raise ValueError(
+                f"{self.source} image source must be a local assets/ path: {source}"
+            )
+
+        decoded_path = unquote(parsed.path)
+        relative_path = PurePosixPath(decoded_path)
+        if (
+            "\\" in decoded_path
+            or relative_path.is_absolute()
+            or not relative_path.parts
+            or relative_path.parts[0] != "assets"
+            or ".." in relative_path.parts
+        ):
+            raise ValueError(
+                f"{self.source} image source must be a relative assets/ path: {source}"
+            )
+
+        root_path = ROOT.resolve()
+        requested_image_path = root_path / Path(*relative_path.parts)
+        image_path = requested_image_path.resolve()
+        assets_path = ASSETS.resolve()
+        if assets_path != root_path / "assets":
+            raise ValueError(f"{self.source} assets/ directory cannot be a symlink")
+        if image_path != requested_image_path:
+            raise ValueError(
+                f"{self.source} image source cannot contain symlinks: {source}"
+            )
+        try:
+            image_path.relative_to(assets_path)
+        except ValueError as error:
+            raise ValueError(
+                f"{self.source} image source escapes assets/: {source}"
+            ) from error
+        if not image_path.is_file():
+            raise FileNotFoundError(
+                f"{self.source} image source does not exist: {source}"
+            )
+        if self.checked_in_assets is None:
+            self.checked_in_assets = checked_in_asset_paths()
+        if relative_path.as_posix() not in self.checked_in_assets:
+            raise ValueError(
+                f"{self.source} image source is not checked in: {source}"
+            )
+
+    def _validate_link(self, href: str) -> None:
+        if any(character.isspace() for character in href):
+            raise ValueError(f"{self.source} contains an invalid link: {href}")
+        parsed = urlsplit(href)
+        if parsed.scheme.lower() not in {"", "http", "https", "mailto"}:
+            raise ValueError(
+                f"{self.source} contains unsupported link scheme: {href}"
+            )
+        if not parsed.scheme and (parsed.netloc or parsed.path):
+            raise ValueError(
+                f"{self.source} contains unsupported local link: {href}"
+            )
+
+
+def validate_html_fragment(fragment: str, source: str) -> None:
+    validator = SafeHtmlValidator(source)
+    validator.feed(fragment)
+    validator.close()
+
+
+def validate_cover_style(style: str) -> None:
+    style_without_comments = CSS_COMMENTS.sub("", style)
+    if "\\" in style_without_comments:
+        raise ValueError("cover CSS escapes are not allowed")
+    if CSS_RESOURCE_CONSTRUCT.search(style_without_comments):
+        raise ValueError("cover CSS cannot load local or remote resources")
 
 
 def extract_cover() -> tuple[str, str]:
@@ -158,11 +351,15 @@ BOOK_CSS = """
 def build() -> None:
     cover_style, cover_body = extract_cover()
     content_html = render_readme()
+    validate_cover_style(cover_style)
+    validate_html_fragment(cover_body, "cover.html")
+    validate_html_fragment(content_html, "README.md")
 
     document = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="{CONTENT_SECURITY_POLICY}">
 <title>Codex 橙皮书</title>
 <style>
 {cover_style}
@@ -193,6 +390,7 @@ def build() -> None:
         ],
         check=True,
         capture_output=True,
+        timeout=CHROME_TIMEOUT_SECONDS,
     )
     size_kb = OUTPUT_PDF.stat().st_size / 1024
     print(f"已导出 {OUTPUT_PDF.name}（{size_kb:.0f} KB）")
