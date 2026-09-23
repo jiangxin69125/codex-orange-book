@@ -5114,6 +5114,8 @@ Codex 负责帮你完成具体编程任务。
 
 ###### 创建 GitHub 仓库
 
+> **安全默认值：请选择 Private（私有）。** 只有在确认项目不包含密钥、个人或客户数据、未授权素材，并且你明确愿意公开完整 Git 历史时，才选择 Public（公开）。仓库一旦公开，内容可能已被他人复制；之后改回私有也无法撤回已经泄露的数据。
+
 <p align="center">
   <img src="assets/images/image-051-7fe82d6fc2.png" alt="GitHub创建仓库页面" width="860">
 </p>
