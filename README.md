@@ -6925,7 +6925,7 @@ Codex 最终生成了一份完整的招商 PPT。成品已上传到云端，点�
   <img src="assets/images/image-106-450fdb2138.png" alt="CC Switch中添加新供应商界面" width="860">
 </p>
 
-开启本地路由映射
+是否开启本地路由，要以供应商卡片上的提示为准。卡片带有「需要路由」标记时才开启；没有该标记时直接启用供应商即可。新版 CC Switch 的 DeepSeek 预设通常可以直连，不需要本地路由。
 
 <p align="center">
   <img src="assets/images/image-107-8f8a2b6a76.png" alt="接入三方模型时在CC Switch中添加模型的设置界面" width="860">
@@ -6937,7 +6937,7 @@ Codex 最终生成了一份完整的招商 PPT。成品已上传到云端，点�
   <img src="assets/images/image-108-9fe0f0d229.png" alt="CC Switch添加新供应商界面" width="860">
 </p>
 
-进入设置，将路由全部打开
+如果卡片带有「需要路由」标记，旧版 CC Switch 需要进入设置打开路由总开关，并在「路由启用」中**只打开 `Codex`**；新版界面则在 Codex 页的「路由」标签中启动路由。不要为了这个示例打开 `Claude` 或 `Gemini`：为其他应用开启路由会改写它们的实时 API 地址和认证配置，使其请求改走 CC Switch，可能导致原有登录失效或把项目内容发给非预期的第三方供应商。
 
 <p align="center">
   <img src="assets/images/image-109-f7edb52f37.png" alt="CC Switch设置中的路由页面" width="860">
