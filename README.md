@@ -1747,9 +1747,12 @@ codex --sandbox danger-full-access
 | `codex exec "任务"` | 一次性执行任务 | 不进入长对话，跑完就结束 | 自动化、检查、生成报告 |
 | `codex e "任务"` | `exec` 的简写 | 同上 | 快速执行 |
 | `codex exec --cd 项目路径 "任务"` | 指定目录执行任务 | 在某个项目里一次性执行 | 自动化脚本 |
-| `codex exec resume` | 恢复 exec 会话 | 接着上次非交互任务继续 | 自动化任务中断后 |
-| `codex exec resume --last` | 恢复最近一次 exec 会话 | 接着最近任务继续 | 最常用恢复方式 |
+| `codex exec --cd 原项目路径 resume` | 在原项目选择要恢复的 exec 会话 | 先绑定原目录，再选择任务 | 自动化任务中断后 |
+| `codex exec --cd 原项目路径 resume --last` | 在原项目恢复最近一次 exec 会话 | 先绑定原目录，再接着任务继续 | 使用过 `--cd` 时 |
 
+恢复会话不会自动回到任务原来的项目目录。`resume --last` 会按这次命令的当前目录筛选会话，恢复后的新一轮也会使用当前目录；如果你从另一个仓库运行，可能会选中另一个会话，或把后续修改写进错误的项目。
+
+如果任务最初使用了 `--cd`，恢复时必须再次指定同一个项目路径。也可以先 `cd` 回原项目，再用 `git rev-parse --show-toplevel` 和 `git status` 确认位置，最后运行 `codex exec resume --last`。不要在不确定当前目录时直接使用裸命令。
 
 示例：
 
