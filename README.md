@@ -737,7 +737,7 @@ Thread 可以理解成：
 
 同一个项目里的一个任务对话。
 
-比如你在 `hello-Codex` 这个项目里，可以开多个 thread：
+比如你在 `hello-codex` 这个项目里，可以开多个 thread：
 
 ```text
 Thread 1：做一个首页
@@ -1630,10 +1630,10 @@ CLI 终端命令，是在 PowerShell / Terminal / Windows Terminal 里输入的�
 
 | 命令 | 作用 | 示例 | 简单来说 |
 | --- | --- | --- | --- |
-| `cd 项目目录` | 进入项目文件夹 | `cd D:\\AI-Codex-Projects\\hello-Codex` | 先走到项目里面 |
+| `cd 项目目录` | 进入项目文件夹 | `cd D:\\AI-Codex-Projects\\hello-codex` | 先走到项目里面 |
 | `codex` | 在当前目录启动 Codex | `codex` | 让 Codex 在当前项目工作 |
-| `codex --cd 项目路径` | 指定目录启动 | `codex --cd D:\\AI-Codex-Projects\\hello-Codex` | 不用先 cd，直接指定项目 |
-| `codex -C 项目路径` | --cd 的简写 | `codex -C ./hello-Codex` | 更短写法 |
+| `codex --cd 项目路径` | 指定目录启动 | `codex --cd D:\\AI-Codex-Projects\\hello-codex` | 不用先 cd，直接指定项目 |
+| `codex -C 项目路径` | --cd 的简写 | `codex -C ./hello-codex` | 更短写法 |
 
 
 新手推荐最简单的方式：
