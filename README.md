@@ -1774,11 +1774,21 @@ codex
 
 | 命令 | 作用 | 简单来说 | 使用场景 |
 | --- | --- | --- | --- |
-| `codex resume` | 恢复之前会话 | 接着之前的 thread 继续 | 上次没做完 |
-| `codex resume --last` | 恢复最近一次会话 | 接着最近任务继续 | 最常用 |
+| `codex resume` | 恢复当前目录的之前会话 | 接着当前项目的 thread 继续 | 上次没做完 |
+| `codex resume --last` | 恢复当前目录最近一次会话 | 接着当前项目的最近任务继续 | 最常用 |
 | `codex archive` | 归档会话 | 把不用的任务收起来 | 任务完成或不要了 |
 | `codex unarchive` | 恢复归档会话 | 找回被归档的任务 | 归档后还想继续 |
 | `codex fork` | 复制旧会话成新 thread | 保留原任务，再试一个新方向 | 多方案尝试 |
+
+`codex resume` 和 `codex resume --last` 默认会按终端的**当前目录**筛选会话，并不是在所有项目里寻找最近一次任务。恢复前先回到原项目并确认仓库根目录：
+
+```text
+cd 原项目目录
+git rev-parse --show-toplevel
+codex resume --last
+```
+
+进入会话后再用 `/status` 确认工作目录正确，然后才继续修改或运行命令。只有确实需要跨项目查找时才使用 `codex resume --all`，并在选择前核对它显示的项目路径。
 
 
 简单来说：
@@ -1904,7 +1914,7 @@ MCP
 | 3 | `codex login status` | 检查登录状态 |
 | 4 | `codex doctor` | 排查环境问题 |
 | 5 | `codex --version` | 查看版本 |
-| 6 | `codex resume --last` | 接着上次任务继续 |
+| 6 | `codex resume --last` | 在当前项目接着上次任务继续；先确认目录 |
 | 7 | `codex archive` | 归档不用的任务 |
 | 8 | `codex update` | 更新 Codex |
 | 9 | `codex exec "任务"` | 一次性执行任务 |
