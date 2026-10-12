@@ -1592,6 +1592,8 @@ codex logout
 
 退出后，下次再运行 Codex CLI，需要重新登录。
 
+> **注意：`codex logout` 只退出账号并删除本机保存的登录凭证，不会删除本地会话记录。** 在公共电脑或多人共用同一个系统账号的设备上，其他人仍可能通过历史会话看到你的提示词、代码和命令输出。不要在这类设备上处理敏感项目；如果已经使用过，请先通过 Codex 的会话管理界面，或用 `codex delete <会话ID>` 逐个永久删除相关会话并确认敏感记录已清除，再执行 `codex logout`。更安全的做法是使用独立的系统账号。
+
 #### CLI 基础命令
 
 Codex CLI 的命令可以分成两类：
@@ -1617,7 +1619,7 @@ CLI 终端命令，是在 PowerShell / Terminal / Windows Terminal 里输入的�
 | `codex --help` | 查看帮助 | 查看支持哪些命令 | 不知道命令怎么用时 |
 | `codex login` | 登录 Codex | 用 ChatGPT 账号或 API Key 登录 | 第一次使用 |
 | `codex login status` | 查看登录状态 | 看当前有没有登录 | 登录异常时 |
-| `codex logout` | 退出登录 | 清除本机登录状态 | 换账号、公共电脑 |
+| `codex logout` | 退出登录 | 仅清除本机登录凭证，不删除会话记录 | 换账号；公共电脑还必须清理敏感会话 |
 | `codex doctor` | 检查环境问题 | 自动生成诊断报告 | 启动失败、登录失败、环境异常 |
 | `codex update` | 更新 Codex | 更新 CLI 版本 | 需要升级时 |
 | `codex app` | 打开 Codex App | 从终端打开桌面版 | 想切到图形界面时 |
@@ -1664,7 +1666,7 @@ C:\
 | `codex login --device-auth` | 用设备码登录 | 远程服务器、浏览器打不开 |
 | `printenv OPENAI_API_KEY \| codex login --with-api-key` | 使用 API Key 登录 | 开发者、自动化、CI/CD |
 | `codex login status` | 查看当前登录方式和状态 | 不确定是否已登录 |
-| `codex logout` | 删除本机保存的登录凭证 | 换账号、公共电脑 |
+| `codex logout` | 删除本机保存的登录凭证，但保留会话记录 | 换账号；公共电脑还必须清理敏感会话 |
 
 
 Windows PowerShell 使用 API Key 登录：
@@ -1772,11 +1774,21 @@ codex
 
 | 命令 | 作用 | 简单来说 | 使用场景 |
 | --- | --- | --- | --- |
-| `codex resume` | 恢复之前会话 | 接着之前的 thread 继续 | 上次没做完 |
-| `codex resume --last` | 恢复最近一次会话 | 接着最近任务继续 | 最常用 |
+| `codex resume` | 恢复当前目录的之前会话 | 接着当前项目的 thread 继续 | 上次没做完 |
+| `codex resume --last` | 恢复当前目录最近一次会话 | 接着当前项目的最近任务继续 | 最常用 |
 | `codex archive` | 归档会话 | 把不用的任务收起来 | 任务完成或不要了 |
 | `codex unarchive` | 恢复归档会话 | 找回被归档的任务 | 归档后还想继续 |
 | `codex fork` | 复制旧会话成新 thread | 保留原任务，再试一个新方向 | 多方案尝试 |
+
+`codex resume` 和 `codex resume --last` 默认会按终端的**当前目录**筛选会话，并不是在所有项目里寻找最近一次任务。恢复前先回到原项目并确认仓库根目录：
+
+```text
+cd 原项目目录
+git rev-parse --show-toplevel
+codex resume --last
+```
+
+进入会话后再用 `/status` 确认工作目录正确，然后才继续修改或运行命令。只有确实需要跨项目查找时才使用 `codex resume --all`，并在选择前核对它显示的项目路径。
 
 
 简单来说：
@@ -1902,7 +1914,7 @@ MCP
 | 3 | `codex login status` | 检查登录状态 |
 | 4 | `codex doctor` | 排查环境问题 |
 | 5 | `codex --version` | 查看版本 |
-| 6 | `codex resume --last` | 接着上次任务继续 |
+| 6 | `codex resume --last` | 在当前项目接着上次任务继续；先确认目录 |
 | 7 | `codex archive` | 归档不用的任务 |
 | 8 | `codex update` | 更新 Codex |
 | 9 | `codex exec "任务"` | 一次性执行任务 |
