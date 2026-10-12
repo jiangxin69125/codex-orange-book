@@ -1592,6 +1592,8 @@ codex logout
 
 退出后，下次再运行 Codex CLI，需要重新登录。
 
+> **注意：`codex logout` 只退出账号并删除本机保存的登录凭证，不会删除本地会话记录。** 在公共电脑或多人共用同一个系统账号的设备上，其他人仍可能通过历史会话看到你的提示词、代码和命令输出。不要在这类设备上处理敏感项目；如果已经使用过，请先通过 Codex 的会话管理界面，或用 `codex delete <会话ID>` 逐个永久删除相关会话并确认敏感记录已清除，再执行 `codex logout`。更安全的做法是使用独立的系统账号。
+
 #### CLI 基础命令
 
 Codex CLI 的命令可以分成两类：
@@ -1617,7 +1619,7 @@ CLI 终端命令，是在 PowerShell / Terminal / Windows Terminal 里输入的�
 | `codex --help` | 查看帮助 | 查看支持哪些命令 | 不知道命令怎么用时 |
 | `codex login` | 登录 Codex | 用 ChatGPT 账号或 API Key 登录 | 第一次使用 |
 | `codex login status` | 查看登录状态 | 看当前有没有登录 | 登录异常时 |
-| `codex logout` | 退出登录 | 清除本机登录状态 | 换账号、公共电脑 |
+| `codex logout` | 退出登录 | 仅清除本机登录凭证，不删除会话记录 | 换账号；公共电脑还必须清理敏感会话 |
 | `codex doctor` | 检查环境问题 | 自动生成诊断报告 | 启动失败、登录失败、环境异常 |
 | `codex update` | 更新 Codex | 更新 CLI 版本 | 需要升级时 |
 | `codex app` | 打开 Codex App | 从终端打开桌面版 | 想切到图形界面时 |
@@ -1664,7 +1666,7 @@ C:\
 | `codex login --device-auth` | 用设备码登录 | 远程服务器、浏览器打不开 |
 | `printenv OPENAI_API_KEY \| codex login --with-api-key` | 使用 API Key 登录 | 开发者、自动化、CI/CD |
 | `codex login status` | 查看当前登录方式和状态 | 不确定是否已登录 |
-| `codex logout` | 删除本机保存的登录凭证 | 换账号、公共电脑 |
+| `codex logout` | 删除本机保存的登录凭证，但保留会话记录 | 换账号；公共电脑还必须清理敏感会话 |
 
 
 Windows PowerShell 使用 API Key 登录：
