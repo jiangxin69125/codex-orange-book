@@ -1774,8 +1774,8 @@ codex
 | --- | --- | --- | --- |
 | `codex resume` | 恢复之前会话 | 接着之前的 thread 继续 | 上次没做完 |
 | `codex resume --last` | 恢复最近一次会话 | 接着最近任务继续 | 最常用 |
-| `codex archive` | 归档会话 | 把不用的任务收起来 | 任务完成或不要了 |
-| `codex unarchive` | 恢复归档会话 | 找回被归档的任务 | 归档后还想继续 |
+| `codex archive 会话ID或名称` | 归档指定会话 | 把不用的任务收起来 | 任务完成或不要了 |
+| `codex unarchive 会话ID或名称` | 恢复指定的归档会话 | 找回被归档的任务 | 归档后还想继续 |
 | `codex fork` | 复制旧会话成新 thread | 保留原任务，再试一个新方向 | 多方案尝试 |
 
 
@@ -1853,7 +1853,7 @@ MCP
 | 命令 | 作用 | 适合谁 |
 | --- | --- | --- |
 | `codex sandbox` | 在 Codex 的沙盒规则下运行命令 | 进阶用户 |
-| `codex sandbox --cd 项目目录 -- 命令` | 指定目录运行沙盒命令 | 调试权限问题 |
+| `codex sandbox --permission-profile 配置档名称 --cd 项目目录 -- 命令` | 用已有权限配置档在指定目录运行沙盒命令 | 调试权限问题 |
 | `codex execpolicy` | 检查某条命令会被允许、询问还是阻止 | 进阶安全配置 |
 
 
@@ -1903,7 +1903,7 @@ MCP
 | 4 | `codex doctor` | 排查环境问题 |
 | 5 | `codex --version` | 查看版本 |
 | 6 | `codex resume --last` | 接着上次任务继续 |
-| 7 | `codex archive` | 归档不用的任务 |
+| 7 | `codex archive 会话ID或名称` | 归档指定的不用任务 |
 | 8 | `codex update` | 更新 Codex |
 | 9 | `codex exec "任务"` | 一次性执行任务 |
 | 10 | `codex logout` | 退出登录 |
@@ -1924,7 +1924,7 @@ MCP
 | 6 | git diff | 在 Git 里再检查一次 |
 | 7 | git add . | 暂存满意的修改 |
 | 8 | git commit -m "说明" | 保存一个版本 |
-| 9 | `codex archive` 或 `/quit` | 归档任务或退出 |
+| 9 | `/archive` 或 `/quit` | 归档当前任务或退出 |
 
 
 ##### CLI 斜杠命令
