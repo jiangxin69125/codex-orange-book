@@ -124,8 +124,8 @@ BOOK_CSS = """
   .content pre {
     background: #1f1c18; color: #f4efe8;
     padding: 3mm 4mm; border-radius: 4px;
-    margin: 2.5mm 0 4mm; overflow: hidden;
-    break-inside: avoid; white-space: pre-wrap; word-break: break-word;
+    margin: 2.5mm 0 4mm; overflow: visible;
+    break-inside: auto; white-space: pre-wrap; word-break: break-word;
   }
   .content pre code { background: transparent; color: inherit; font-size: 8.6pt; padding: 0; }
 
