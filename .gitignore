@@ -1,5 +1,6 @@
 .cache/
 .DS_Store
+__pycache__/
 
 # 中间产物：book.html 由 tools/build_pdf.py 生成，无需纳入版本库
 book.html
